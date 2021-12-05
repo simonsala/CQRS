@@ -1,0 +1,2 @@
+Select * from INFORMATION_SCHEMA.TABLES
+GO;

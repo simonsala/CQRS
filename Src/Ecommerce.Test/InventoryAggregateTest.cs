@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using CQRS;
@@ -7,7 +7,7 @@ using CQRS.TestProcessors;
 using Ecommerce.Domain;
 using NUnit.Framework;
 
-namespace Debugger.Test
+namespace Ecommerce.Test
 {
     [TestFixture]
     public class InventoryAggregateTest
@@ -17,19 +17,19 @@ namespace Debugger.Test
         [SetUp]
         public void SetUp()
         {
-            _textEventProcessor = new TestEventProcessor(new[] { Assembly.GetAssembly(typeof(InventoryAggregate))}, new TestEventSource() );
+            _textEventProcessor = new TestEventProcessor(new[] { Assembly.GetAssembly(typeof(InventoryAggregate)) }, new TestEventSource());
         }
 
         #region InventoryCreated
         [Test]
-        public void InventoryCreated()
+        public void Should_CreateInventory_When_InventoryNotCreated()
         {
             //Assign
             var aggregateId = Guid.NewGuid();
             var eventId = Guid.NewGuid();
 
             //Assert
-             _textEventProcessor.ProcessEvent(new InventoryCreated()
+            _textEventProcessor.ProcessEvent(new CreateInventory()
             {
                 AggregateId = aggregateId,
                 EventId = eventId,
@@ -38,7 +38,7 @@ namespace Debugger.Test
         }
 
         [Test]
-        public void InventoryCreated_EmptyAggregateId_Exception()
+        public void ShouldNot_CreateInventory_When_AggregateId_Empty()
         {
             //Assign
             var aggregateId = Guid.Empty;
@@ -47,7 +47,7 @@ namespace Debugger.Test
             //Act & Assert
             Assert.Throws<AggregateException>(() =>
             {
-                _textEventProcessor.ProcessEvent(new InventoryCreated()
+                _textEventProcessor.ProcessEvent(new CreateInventory()
                 {
                     AggregateId = aggregateId,
                     EventId = eventId,
@@ -57,7 +57,7 @@ namespace Debugger.Test
         }
 
         [Test]
-        public void InventoryCreated_InventoryAlreadyCreated_Exception()
+        public void ShouldNot_CreateInventory_When_InventoryAlreadyCreated()
         {
             //Assign
             var aggregateId = Guid.NewGuid();
@@ -66,7 +66,7 @@ namespace Debugger.Test
             //Act
             _textEventProcessor.Given(new List<dynamic>()
             {
-                new InventoryCreated()
+                new CreateInventory()
                 {
                     AggregateId = aggregateId,
                     EventId = eventId,
@@ -77,7 +77,7 @@ namespace Debugger.Test
             //Assert
             Assert.Throws<AggregateException>(() =>
             {
-                _textEventProcessor.ProcessEvent(new InventoryCreated()
+                _textEventProcessor.ProcessEvent(new CreateInventory()
                 {
                     AggregateId = aggregateId,
                     EventId = eventId,
@@ -87,17 +87,17 @@ namespace Debugger.Test
         }
         #endregion
 
-        #region ProductAdded
+        #region AddProduct
         [Test]
-        public void ProductAdded()
+        public void Should_AddProduct_When_InventoryCreated()
         {
             //Assign
             var aggregateId = Guid.NewGuid();
-         
+
             //Act
             _textEventProcessor.Given(new List<dynamic>()
             {
-                new InventoryCreated()
+                new CreateInventory()
                 {
                     AggregateId = aggregateId,
                     EventId = Guid.NewGuid(),
@@ -106,7 +106,7 @@ namespace Debugger.Test
             });
 
             //Assert
-            _textEventProcessor.ProcessEvent(new ProductAdded()
+            _textEventProcessor.ProcessEvent(new AddProduct()
             {
                 AggregateId = aggregateId,
                 EventId = Guid.NewGuid(),
@@ -117,7 +117,7 @@ namespace Debugger.Test
         }
 
         [Test]
-        public void ProductAdded_InventoryNotCreated_Exception()
+        public void ShouldNot_CreatedProduct_When_InventoryNotCreated()
         {
             //Assign
             var aggregateId = Guid.NewGuid();
@@ -125,7 +125,7 @@ namespace Debugger.Test
             //Act & Assert
             Assert.Throws<AggregateException>(() =>
             {
-                _textEventProcessor.ProcessEvent(new ProductAdded()
+                _textEventProcessor.ProcessEvent(new AddProduct()
                 {
                     AggregateId = aggregateId,
                     EventId = Guid.NewGuid(),
@@ -137,9 +137,9 @@ namespace Debugger.Test
         }
         #endregion
 
-        #region ProductRemoved
+        #region RemoveProduct
         [Test]
-        public void ProductRemoved()
+        public void Should_RemoveProduct_When_ProductAdded()
         {
             //Assign
             var aggregateId = Guid.NewGuid();
@@ -149,13 +149,13 @@ namespace Debugger.Test
             //Act
             _textEventProcessor.Given(new List<dynamic>()
             {
-                new InventoryCreated()
+                new CreateInventory()
                 {
                     AggregateId = aggregateId,
                     EventId = Guid.NewGuid(),
                     InventoryName = "Electronics"
                 },
-                new ProductAdded()
+                new AddProduct()
                 {
                     AggregateId = aggregateId,
                     EventId = productEventId,
@@ -166,7 +166,7 @@ namespace Debugger.Test
             });
 
             //Assert
-            _textEventProcessor.ProcessEvent(new ProductRemoved()
+            _textEventProcessor.ProcessEvent(new RemoveProduct()
             {
                 AggregateId = aggregateId,
                 EventId = productEventId,
@@ -174,7 +174,7 @@ namespace Debugger.Test
         }
 
         [Test]
-        public void ProductRemoved_InventoryNotCreated_Exception()
+        public void ShouldNot_RemoveProduct_When_InventoryNotCreated()
         {
             //Assign
             var aggregateId = Guid.NewGuid();
@@ -183,7 +183,7 @@ namespace Debugger.Test
             //Act & Assert
             Assert.Throws<AggregateException>(() =>
             {
-                _textEventProcessor.ProcessEvent(new ProductRemoved()
+                _textEventProcessor.ProcessEvent(new RemoveProduct()
                 {
                     AggregateId = aggregateId,
                     EventId = productEventId,
@@ -192,7 +192,7 @@ namespace Debugger.Test
         }
 
         [Test]
-        public void ProductRemoved_ProductNotAdded_Exception()
+        public void ShouldNot_RemoveProduct_When_ProductNotAdded()
         {
             //Assign
             var aggregateId = Guid.NewGuid();
@@ -201,7 +201,7 @@ namespace Debugger.Test
             //Act
             _textEventProcessor.Given(new List<dynamic>()
             {
-                new InventoryCreated()
+                new CreateInventory()
                 {
                     AggregateId = aggregateId,
                     EventId = Guid.NewGuid(),
@@ -212,7 +212,7 @@ namespace Debugger.Test
             //Assert
             Assert.Throws<AggregateException>(() =>
             {
-                _textEventProcessor.ProcessEvent(new ProductRemoved()
+                _textEventProcessor.ProcessEvent(new RemoveProduct()
                 {
                     AggregateId = aggregateId,
                     EventId = productEventId,

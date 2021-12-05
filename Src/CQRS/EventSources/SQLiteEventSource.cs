@@ -159,5 +159,10 @@ namespace CQRS.EventSources
             }
             return eventSources;
         }
+
+        public void ScaffoldEventSourcing()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

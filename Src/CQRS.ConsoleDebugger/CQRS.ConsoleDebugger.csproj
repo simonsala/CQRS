@@ -11,7 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CQRS\CQRS.csproj" />
-    <ProjectReference Include="..\EcommerceModels\Ecommerce.csproj" />
+    <ProjectReference Include="..\EcommerceModels\Ecommerce.WriteModel.csproj" />
   </ItemGroup>
 
 </Project>

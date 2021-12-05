@@ -31,21 +31,11 @@ namespace CQRS.EventProcessors
                 ProcessHandlers(@event);
         }
 
-        private bool ProcessDomain<E>(E @event) where E : Event
+        public bool ProcessDomain<E>(E @event) where E : Event
         {
             var eventCommitted = false;
-            var types = _assemblies.SelectMany(a => a.GetTypes())
-                .Where(t => t.IsAssignableTo(typeof(IRaiseEvent<E>))).ToList();
-              
-            switch (types.Count)
-            {
-                case > 1:
-                    throw new AggregateException("More than one aggregate handling the same event.");
-                case 0:
-                    throw new AggregateException("No aggregate found that handles that event.");
-            }
 
-            var aggregateType = types.ToArray()[0];
+            var aggregateType = GetAggregateType(typeof(IRaiseEvent<E>));
             var aggregateQualifiedName = aggregateType.AssemblyQualifiedName;
 
             var builder = new ContainerBuilder();
@@ -72,29 +62,12 @@ namespace CQRS.EventProcessors
             return eventCommitted;
         }
 
-        private void HandleAndApply(ref object aggregate, object @event, Type eventType)
-        {
-            var iRiseEventType = typeof(IRaiseEvent<>);
-            var aggregateHandleType = iRiseEventType.MakeGenericType(eventType);
-           
-            var handleMethodInfo = aggregateHandleType.GetMethod("Handle");
-            handleMethodInfo?.Invoke(aggregate, new[] { @event });
-            
-            var applyMethodInfo = aggregateHandleType.GetMethod("Apply");
-            applyMethodInfo?.Invoke(aggregate, new[] { @event });
-        }
-
         public void ProcessHandlers<E>(E @event) where E : Event
         {
-            var eventHandlerTypes =
-                _assemblies
-                    .SelectMany(a => a.GetTypes())
-                    .Where(t => t.IsAssignableTo(typeof(IEventHandler)) && t.IsAssignableTo(typeof(IHandleEvent<E>)))
-                    .ToList();
-            if (eventHandlerTypes.Count <= 0) return;
-
             var builder = new ContainerBuilder();
             builder.RegisterModule(_handlerModule);
+
+            var eventHandlerTypes = GetEventHandlerTypes(typeof(IHandleEvent<E>));
 
             foreach (var eventHandlerType in eventHandlerTypes)
             {
@@ -113,6 +86,44 @@ namespace CQRS.EventProcessors
                 var handleEvent = eventHandler as IHandleEvent<E>;
                 handleEvent.Handle(@event);
             }
+        }
+
+        public void HandleAndApply(ref object aggregate, object @event, Type eventType)
+        {
+            var raiseEventType = typeof(IRaiseEvent<>);
+            var aggregateHandleType = raiseEventType.MakeGenericType(eventType);
+
+            var handleMethodInfo = aggregateHandleType.GetMethod("Handle");
+            handleMethodInfo?.Invoke(aggregate, new[] { @event });
+
+            var applyMethodInfo = aggregateHandleType.GetMethod("Apply");
+            applyMethodInfo?.Invoke(aggregate, new[] { @event });
+        }
+
+        public Type GetAggregateType(Type raiseEventType)
+        {
+            var types = _assemblies.SelectMany(a => a.GetTypes())
+                .Where(t => t.IsAssignableTo(raiseEventType)).ToArray();
+
+            switch (types.Length)
+            {
+                case > 1:
+                    throw new AggregateException("More than one aggregate handling the same event.");
+                case 0:
+                    throw new AggregateException("No aggregate found that handles that event.");
+            }
+
+            return types[0];
+        }
+
+        public List<Type> GetEventHandlerTypes(Type handlerEventType)
+        {
+            var eventHandlerTypes =
+                _assemblies
+                    .SelectMany(a => a.GetTypes())
+                    .Where(t => t.IsAssignableTo(typeof(IEventHandler)) && t.IsAssignableTo(handlerEventType))
+                    .ToList();
+            return eventHandlerTypes;
         }
     }
 }

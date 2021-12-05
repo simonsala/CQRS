@@ -15,6 +15,7 @@ namespace CQRS.EventSources
         public SqlServerEventSource(string connectionString)
         {
             this._connectionString = connectionString;
+            ScaffoldEventSourcing();
         }
 
         public bool CommitEvent<E>(string aggregateQualifiedName, E @event) where E : Event
@@ -150,34 +151,170 @@ namespace CQRS.EventSources
             return eventSources;
         }
 
+        public void ScaffoldEventSourcing()
+        {
+            if (TablesExists()) return;
+            CreateAggregatesTable();
+            CreateEventsTable();
+        }
+
+        private bool TablesExists()
+        {
+            using SqlConnection connection = new SqlConnection(this._connectionString);
+            
+            var tablesExists = true;
+            
+            try
+            {
+                connection.Open();
+                
+                var command = connection.CreateCommand();
+                command.Connection = connection;
+                command.CommandText = "select COUNT(TABLE_NAME) from INFORMATION_SCHEMA.TABLES where TABLE_NAME like 'Aggregates' or TABLE_NAME like 'Events'";
+                
+                using var sqlReader = command.ExecuteReader();
+
+                var count = 0;
+
+                if (sqlReader.Read())
+                {
+                    count = sqlReader.GetInt32(0);
+                }
+
+                tablesExists = (count == 2);
+                return tablesExists;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            finally
+            {
+                connection.Close();
+            }
+
+            return tablesExists;
+        }
+
+        private void CreateEventsTable()
+        {
+            using SqlConnection connection = new SqlConnection(this._connectionString);
+    
+            try
+            {
+                connection.Open();
+                
+                var command = connection.CreateCommand();
+                command.CommandText =
+                @"SET ANSI_NULLS ON
+
+                 SET QUOTED_IDENTIFIER ON
+
+                 CREATE TABLE [dbo].[Events](
+	                [EventId] [uniqueidentifier] NOT NULL,
+	                [EventType] [varchar](500) NULL,
+	                [Version] [int] NOT NULL,
+	                [EventData] [varchar](max) NOT NULL,
+	                [AggregateId] [uniqueidentifier] NOT NULL,
+	                [CreationTime] [datetimeoffset](7) NOT NULL,
+                PRIMARY KEY CLUSTERED 
+                (
+	                [EventId] ASC
+                )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+                ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+
+                ALTER TABLE [dbo].[Events]  WITH CHECK ADD  CONSTRAINT [FK_AggregateId] FOREIGN KEY([AggregateId])
+                REFERENCES [dbo].[Aggregates] ([AggregateId])
+
+                ALTER TABLE [dbo].[Events] CHECK CONSTRAINT [FK_AggregateId]
+
+                ALTER TABLE [dbo].[Events]  WITH CHECK ADD  CONSTRAINT [EventData record should be formatted as JSON] CHECK  ((isjson([EventData])=(1)))
+
+                ALTER TABLE [dbo].[Events] CHECK CONSTRAINT [EventData record should be formatted as JSON]
+                ";
+
+                command.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            finally
+            {
+                connection.Close();
+            }
+        }
+
+        private void CreateAggregatesTable()
+        {
+            using SqlConnection connection = new SqlConnection(this._connectionString);
+
+            try
+            {
+                connection.Open();
+                
+                var command = connection.CreateCommand();
+                command.CommandText =
+                @"SET ANSI_NULLS ON
+
+                SET QUOTED_IDENTIFIER ON
+
+                CREATE TABLE [dbo].[Aggregates] (
+                  [AggregateId] [uniqueidentifier] NOT NULL,
+                  [AggregateType] [varchar](500) NULL,
+                  [Version] [int] NULL,
+                  [LastModified] [datetimeoffset](7) NOT NULL,
+                  CONSTRAINT [PK_AggregateId] PRIMARY KEY CLUSTERED
+                  (
+                  [AggregateId] ASC
+                  ) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+                ) ON [PRIMARY]
+                ";
+
+                command.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            finally
+            {
+                connection.Close();
+            }
+        }
+
         private int GetVersion(Guid aggregateId)
         {
             var version = 0;
-            using (SqlConnection connection = new SqlConnection(this._connectionString))
+            
+            using SqlConnection connection = new SqlConnection(this._connectionString);
+            
+            try
             {
-                try
+                connection.Open();
+                
+                var command = connection.CreateCommand();
+                command.CommandText = "select Version FROM Aggregates WHERE AggregateId = @AggregateId";
+                command.Parameters.Add(new SqlParameter("@AggregateId", SqlDbType.UniqueIdentifier));
+                command.Parameters["@AggregateId"].Value = aggregateId;
+                
+                using var sqlReader = command.ExecuteReader();
+                
+                if (sqlReader.Read())
                 {
-                    connection.Open();
-                    var command = connection.CreateCommand();
-                    command.CommandText = "select Version FROM Aggregates WHERE AggregateId = @AggregateId";
-                    command.Parameters.Add(new SqlParameter("@AggregateId", SqlDbType.UniqueIdentifier));
-                    command.Parameters["@AggregateId"].Value = aggregateId;
-                    using var sqlReader = command.ExecuteReader();
-                    if (sqlReader.Read())
-                    {
-                        version = sqlReader.GetInt32(0);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("Commit Exception Type: {0}", ex.GetType());
-                    Console.WriteLine("Message: {0}", ex.Message);
-                }
-                finally
-                {
-                    connection.Close();
+                    version = sqlReader.GetInt32(0);
                 }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Commit Exception Type: {0}", ex.GetType());
+                Console.WriteLine("Message: {0}", ex.Message);
+            }
+            finally
+            {
+                connection.Close();
+            }
+
             return version;
         }
     }

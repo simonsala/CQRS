@@ -1,25 +1,25 @@
 ﻿using System;
 using CQRS.Events;
 
-namespace Ecommerce.Domain
+namespace Ecommerce.WriteModel.Domain
 {
-    public class InventoryCreated : Event
+    public class CreateInventory : Event
     {
         public string InventoryName { get; set; }
     }
 
-    public class ProductAdded : Event
+    public class AddProduct : Event
     {
         public string ProductName { get; set; }
         public double Price { get; set; }
         public Guid SerialId { get; set; }
     }
 
-    public class ProductRemoved : Event
+    public class RemoveProduct : Event
     {
     }
 
-    public class ProductUpdated : Event
+    public class UpdateProduct : Event
     {
         public string ProductName { get; set; }
         public double Price { get; set; }
