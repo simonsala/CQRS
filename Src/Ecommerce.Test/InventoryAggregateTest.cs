@@ -4,7 +4,7 @@ using System.Reflection;
 using CQRS;
 using CQRS.EventProcessors;
 using CQRS.TestProcessors;
-using Ecommerce.Domain;
+using Ecommerce.WriteModel.Domain;
 using NUnit.Framework;
 
 namespace Ecommerce.Test

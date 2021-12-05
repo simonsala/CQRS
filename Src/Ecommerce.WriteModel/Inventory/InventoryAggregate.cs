@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using CQRS.Aggregates;
+using Ecommerce.WriteModel.Domain;
 
 namespace Ecommerce.Domain
 {
