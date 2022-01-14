@@ -4,7 +4,7 @@ using System.Reflection;
 using CQRS;
 using CQRS.EventProcessors;
 using CQRS.TestProcessors;
-using Ecommerce.WriteModel.Domain;
+using Ecommerce.WriteModel.Inventory;
 using NUnit.Framework;
 
 namespace Ecommerce.Test
@@ -26,13 +26,12 @@ namespace Ecommerce.Test
         {
             //Assign
             var aggregateId = Guid.NewGuid();
-            var eventId = Guid.NewGuid();
 
             //Assert
             _textEventProcessor.ProcessEvent(new CreateInventory()
             {
                 AggregateId = aggregateId,
-                EventId = eventId,
+                EventId = Guid.NewGuid(),
                 InventoryName = "Electronics"
             });
         }
@@ -42,7 +41,6 @@ namespace Ecommerce.Test
         {
             //Assign
             var aggregateId = Guid.Empty;
-            var eventId = Guid.NewGuid();
 
             //Act & Assert
             Assert.Throws<AggregateException>(() =>
@@ -50,7 +48,7 @@ namespace Ecommerce.Test
                 _textEventProcessor.ProcessEvent(new CreateInventory()
                 {
                     AggregateId = aggregateId,
-                    EventId = eventId,
+                    EventId = Guid.NewGuid(),
                     InventoryName = "Electronics"
                 });
             });
@@ -61,7 +59,6 @@ namespace Ecommerce.Test
         {
             //Assign
             var aggregateId = Guid.NewGuid();
-            var eventId = Guid.NewGuid();
 
             //Act
             _textEventProcessor.Given(new List<dynamic>()
@@ -69,7 +66,7 @@ namespace Ecommerce.Test
                 new CreateInventory()
                 {
                     AggregateId = aggregateId,
-                    EventId = eventId,
+                    EventId = Guid.NewGuid(),
                     InventoryName = "Electronics"
                 }
             });
@@ -80,7 +77,7 @@ namespace Ecommerce.Test
                 _textEventProcessor.ProcessEvent(new CreateInventory()
                 {
                     AggregateId = aggregateId,
-                    EventId = eventId,
+                    EventId = Guid.NewGuid(),
                     InventoryName = "Electronics"
                 });
             });
@@ -110,9 +107,9 @@ namespace Ecommerce.Test
             {
                 AggregateId = aggregateId,
                 EventId = Guid.NewGuid(),
+                ProductId = Guid.NewGuid(),
                 ProductName = "IPhone 13",
                 Price = 10.4,
-                SerialId = Guid.NewGuid(),
             });
         }
 
@@ -129,9 +126,9 @@ namespace Ecommerce.Test
                 {
                     AggregateId = aggregateId,
                     EventId = Guid.NewGuid(),
+                    ProductId = Guid.NewGuid(),
                     ProductName = "IPhone 13",
                     Price = 10.4,
-                    SerialId = Guid.NewGuid(),
                 });
             });
         }
@@ -143,7 +140,7 @@ namespace Ecommerce.Test
         {
             //Assign
             var aggregateId = Guid.NewGuid();
-            var productEventId = Guid.NewGuid();
+            var productId = Guid.NewGuid();
 
 
             //Act
@@ -158,10 +155,10 @@ namespace Ecommerce.Test
                 new AddProduct()
                 {
                     AggregateId = aggregateId,
-                    EventId = productEventId,
+                    EventId = Guid.NewGuid(),
+                    ProductId = productId,
                     ProductName = "IPhone 13",
                     Price = 10.4,
-                    SerialId = Guid.NewGuid(),
                 }
             });
 
@@ -169,7 +166,8 @@ namespace Ecommerce.Test
             _textEventProcessor.ProcessEvent(new RemoveProduct()
             {
                 AggregateId = aggregateId,
-                EventId = productEventId,
+                EventId = Guid.NewGuid(),
+                ProductId = productId,
             });
         }
 
@@ -178,7 +176,6 @@ namespace Ecommerce.Test
         {
             //Assign
             var aggregateId = Guid.NewGuid();
-            var productEventId = Guid.NewGuid();
 
             //Act & Assert
             Assert.Throws<AggregateException>(() =>
@@ -186,7 +183,8 @@ namespace Ecommerce.Test
                 _textEventProcessor.ProcessEvent(new RemoveProduct()
                 {
                     AggregateId = aggregateId,
-                    EventId = productEventId,
+                    EventId = Guid.NewGuid(),
+                    ProductId = Guid.NewGuid(),
                 });
             });
         }
@@ -196,7 +194,6 @@ namespace Ecommerce.Test
         {
             //Assign
             var aggregateId = Guid.NewGuid();
-            var productEventId = Guid.NewGuid();
 
             //Act
             _textEventProcessor.Given(new List<dynamic>()
@@ -215,7 +212,8 @@ namespace Ecommerce.Test
                 _textEventProcessor.ProcessEvent(new RemoveProduct()
                 {
                     AggregateId = aggregateId,
-                    EventId = productEventId,
+                    EventId = Guid.NewGuid(),
+                    ProductId = Guid.NewGuid()
                 });
             });
         }

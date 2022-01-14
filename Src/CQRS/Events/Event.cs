@@ -18,5 +18,6 @@ namespace CQRS.Events
     {
        public Guid AggregateId { get; set; }
        public Guid EventId { get; set; }
+       public DateTimeOffset DateCreated { get; set; } = DateTimeOffset.Now;
     }
 }

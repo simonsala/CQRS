@@ -4,9 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace CQRS.Test
+namespace CQRS.Test.EventSources
 {
-    class EventProcessorTest
+    class SqlServerEventSourceTest
     {
     }
 }

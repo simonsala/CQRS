@@ -4,50 +4,129 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
-using System.Threading.Tasks;
+using System.Threading;
 using CQRS.Aggregates;
 using CQRS.Events;
 using CQRS.EventSources;
+using CQRS.Exceptions;
+using AggregateException = System.AggregateException;
 using Module = Autofac.Module;
 
 namespace CQRS.EventProcessors
 {
     public class EventProcessor : IEventProcessor
     {
-        private readonly Assembly[] _assemblies;
-        private readonly ISqlEventSource _sqlEventSource;
-        private readonly Module _handlerModule;
+        private Assembly[] _assemblies;
+        private ISqlEventSource _sqlEventSource;
+        private int _retries = 3;
+        private int _ongoingRetries = 0;
+        private IContainer _container;
 
-        public EventProcessor(Assembly[] assemblies, ISqlEventSource sqlEventSource, Module handlerModule)
+        public EventProcessor()
+        {
+
+        }
+
+        public EventProcessor(Assembly[] assemblies, ISqlEventSource sqlEventSource, int retries, IContainer container)
         {
             _assemblies = assemblies;
             _sqlEventSource = sqlEventSource;
-            _handlerModule = handlerModule;
+            _retries = retries;
+            _container = container;
+        }
+
+        public ISqlEventSource SqlEventSource
+        {
+            get => _sqlEventSource;
+            set
+            {
+                _sqlEventSource = value;
+            }
+        }
+
+        public int Retries
+        {
+            get => _retries;
+            set
+            {
+                _retries = value;
+            }
+        }
+
+        public int OngoingRetries
+        {
+            get => _ongoingRetries;
+        }
+
+        public Assembly[] Assemblies
+        {
+            get => _assemblies;
+            set
+            {
+                _assemblies = value;
+            }
+        }
+
+        public IContainer Container
+        {
+            get => _container;
+            set
+            {
+                _container = value;
+            }
         }
 
         public void ProcessEvent<E>(E @event) where E : Event
         {
-            if (ProcessDomain(@event)) 
-                ProcessHandlers(@event);
+            var retries = 1;
+            _ongoingRetries = 0;
+
+            while (retries != _retries + 1)
+            {
+                try
+                {
+                    _ongoingRetries = retries;
+
+                    if (ProcessDomain(@event))
+                    {
+                        ProcessHandlers(@event);
+                    }
+                    break;
+                }
+                catch (SqlEventSourceException ex)
+                {
+                    if (retries == _retries) throw;
+                }
+                catch (ConcurrencyException ex)
+                {
+                    if (retries == _retries) throw;
+                }
+                catch (Exception ex)
+                {
+                     throw;
+                }
+
+                retries++;
+            }
         }
 
         public bool ProcessDomain<E>(E @event) where E : Event
         {
-            var eventCommitted = false;
-
             var aggregateType = GetAggregateType(typeof(IRaiseEvent<E>));
             var aggregateQualifiedName = aggregateType.AssemblyQualifiedName;
 
             var builder = new ContainerBuilder();
             builder.RegisterType(aggregateType);
-                
+
             var container = builder.Build();
 
             using var scope = container.BeginLifetimeScope();
             var aggregate = scope.Resolve(aggregateType);
-                    
+
             var eventSources = _sqlEventSource.GetEventSources(@event.AggregateId);
-                    
+
+            var currentVersion = eventSources.Count > 0 ? eventSources.Last().Version : 0;
+
             if (eventSources.Count > 0)
                 foreach (var eventSource in eventSources)
                 {
@@ -57,25 +136,24 @@ namespace CQRS.EventProcessors
                 }
 
             HandleAndApply(ref aggregate, @event, typeof(E));
-                    
-            eventCommitted = _sqlEventSource.CommitEvent(aggregateQualifiedName, @event);
+
+            var eventCommitted = _sqlEventSource.CommitEvent(aggregateQualifiedName, currentVersion, @event);
+
             return eventCommitted;
         }
 
         public void ProcessHandlers<E>(E @event) where E : Event
         {
-            var builder = new ContainerBuilder();
-            builder.RegisterModule(_handlerModule);
-
             var eventHandlerTypes = GetEventHandlerTypes(typeof(IHandleEvent<E>));
 
-            foreach (var eventHandlerType in eventHandlerTypes)
-            {
-                builder.RegisterType(eventHandlerType).As<IEventHandler>();
-            }
-
-            var container = builder.Build();
-            using var scope = container.BeginLifetimeScope();
+            using var scope = _container.BeginLifetimeScope(
+                b =>
+                {
+                    foreach (var eventHandlerType in eventHandlerTypes)
+                    {
+                        b.RegisterType(eventHandlerType).As<IEventHandler>();
+                    }
+                });
 
             var eventHandlers =
                 scope.Resolve<IEnumerable<IEventHandler>>()

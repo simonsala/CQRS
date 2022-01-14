@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using CQRS.Aggregates;
-using Ecommerce.WriteModel.Domain;
 
-namespace Ecommerce.Domain
+namespace Ecommerce.WriteModel.Inventory
 {
     public class InventoryAggregate : IAggregate,
         IRaiseEvent<CreateInventory>,
@@ -35,27 +34,27 @@ namespace Ecommerce.Domain
 
         public void Apply(AddProduct e)
         { 
-            _productIds.Add(e.EventId);
+            _productIds.Add(e.ProductId);
         }
 
         public void Handle(RemoveProduct e)
         {
             if (e.AggregateId == Guid.Empty || AggregateId != e.AggregateId)
                 throw new AggregateException("Cam not remove a product from an empty inventory.");
-            if (!_productIds.Contains(e.EventId))
+            if (!_productIds.Contains(e.ProductId))
                 throw new AggregateException("Product has been already removed or has not been created yet.");
         }
 
         public void Apply(RemoveProduct e)
         {
-            _productIds.Remove(e.EventId);
+            _productIds.Remove(e.ProductId);
         }
         
         public void Handle(UpdateProduct e)
         {
             if (e.AggregateId == Guid.Empty)
                 throw new AggregateException("Cam not update a product of an empty inventory.");
-            if (!_productIds.Contains(e.EventId))
+            if (!_productIds.Contains(e.ProductId))
                 throw new AggregateException("Can not update a product that does not exist.");
         }
 

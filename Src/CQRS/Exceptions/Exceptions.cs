@@ -25,4 +25,11 @@ namespace CQRS.Exceptions
         {
         }
     }
+
+    public class ConcurrencyException : Exception
+    {
+        public ConcurrencyException(string message) : base($"Concurrency Exception: {message}")
+        {
+        }
+    }
 }

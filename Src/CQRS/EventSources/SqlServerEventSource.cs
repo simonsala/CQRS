@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
 using System.Text.Json;
-using System.Threading.Tasks;
 using CQRS.Events;
+using CQRS.Exceptions;
 
 namespace CQRS.EventSources
 {
@@ -18,7 +18,7 @@ namespace CQRS.EventSources
             ScaffoldEventSourcing();
         }
 
-        public bool CommitEvent<E>(string aggregateQualifiedName, E @event) where E : Event
+        public bool CommitEvent<E>(string aggregateQualifiedName, int currentVersion, E @event) where E : Event
         {
             using (SqlConnection connection = new SqlConnection(this._connectionString))
             {
@@ -35,6 +35,9 @@ namespace CQRS.EventSources
                 var eventType = typeof(E).AssemblyQualifiedName;
                 var version = GetVersion(@event.AggregateId);
 
+                if (version > currentVersion)
+                    throw new ConcurrencyException($"A concurrency issue has occurred.");
+                
                 try
                 {
                     command.CommandText = "select Count(1) FROM Aggregates WHERE AggregateId = @AggregateId";
@@ -50,12 +53,10 @@ namespace CQRS.EventSources
                         command.Parameters["@Version"].Value = version + 1;
                         command.Parameters["@CreationTime"].Value = creationTime;
 
-                        //Update Aggregate
                         command.CommandText =
                             "update Aggregates set Version = @Version, LastModified = @CreationTime where AggregateId = @AggregateId";
                         command.ExecuteNonQuery();
 
-                        //Insert Event
                         command.Parameters.Add(new SqlParameter("@EventId", SqlDbType.UniqueIdentifier));
                         command.Parameters.Add(new SqlParameter("@EventType", SqlDbType.VarChar));
                         command.Parameters.Add(new SqlParameter("@EventData", SqlDbType.VarChar));
@@ -87,7 +88,6 @@ namespace CQRS.EventSources
                         command.ExecuteNonQuery();
                     }
 
-                    // Attempt to commit the transaction.
                     transaction.Commit();
                     Console.WriteLine("transaction successful!");
                     return true;
@@ -100,8 +100,7 @@ namespace CQRS.EventSources
                     }
                     catch (Exception ex2)
                     {
-                        Console.WriteLine("Rollback Exception Type: {0}", ex2.GetType());
-                        Console.WriteLine("  Message: {0}", ex2.Message);
+                        throw new SqlEventSourceException($"Transaction rollback failed. Aggregate: {aggregateQualifiedName}. Event: {@event.GetType()}. Version: {currentVersion}. Inner Exception: {ex.Message}. Outer Exception: {ex2.Message}");
                     }
                 }
                 finally
@@ -115,39 +114,39 @@ namespace CQRS.EventSources
         public List<EventSource> GetEventSources(Guid aggregateId)
         {
             var eventSources = new List<EventSource>();
+
+            using SqlConnection connection = new SqlConnection(this._connectionString);
+           
             try
             {
-                using (SqlConnection connection = new SqlConnection(this._connectionString))
+                connection.Open();
+
+                var command = new SqlCommand(null, connection);
+                command.CommandText = "select * from Events where AggregateId = @AggregateId order by Version asc";
+                command.Parameters.Add(new SqlParameter("@AggregateId", SqlDbType.UniqueIdentifier));
+                command.Parameters["@AggregateId"].Value = aggregateId;
+
+                using (var sqlReader = command.ExecuteReader())
                 {
-                    connection.Open();
-
-                    var command = new SqlCommand(null, connection);
-                    command.CommandText = "select * from Events where AggregateId = @AggregateId order by Version asc";
-                    command.Parameters.Add(new SqlParameter("@AggregateId", SqlDbType.UniqueIdentifier));
-                    command.Parameters["@AggregateId"].Value = aggregateId;
-
-                    using (var sqlReader = command.ExecuteReader())
+                    while (sqlReader.Read())
                     {
-                        while (sqlReader.Read())
+                        eventSources.Add(new EventSource()
                         {
-                            eventSources.Add(new EventSource()
-                            {
-                                EventId = sqlReader.GetGuid(0),
-                                EventType = sqlReader.GetString(1),
-                                Version = sqlReader.GetInt32(2),
-                                EventData = sqlReader.GetString(3),
-                                AggregateId = sqlReader.GetGuid(4),
-                                CreationTime = sqlReader.GetDateTimeOffset(5)
-                            });
-                        }
+                            EventId = sqlReader.GetGuid(0),
+                            EventType = sqlReader.GetString(1),
+                            Version = sqlReader.GetInt32(2),
+                            EventData = sqlReader.GetString(3),
+                            AggregateId = sqlReader.GetGuid(4),
+                            CreationTime = sqlReader.GetDateTimeOffset(5)
+                        });
                     }
                 }
             }
-            catch (Exception ex)
+            finally
             {
-                Console.WriteLine("Commit Exception Type: {0}", ex.GetType());
-                Console.WriteLine("Message: {0}", ex.Message);
+                connection.Open();
             }
+
             return eventSources;
         }
 
@@ -161,9 +160,7 @@ namespace CQRS.EventSources
         private bool TablesExists()
         {
             using SqlConnection connection = new SqlConnection(this._connectionString);
-            
-            var tablesExists = true;
-            
+
             try
             {
                 connection.Open();
@@ -181,19 +178,13 @@ namespace CQRS.EventSources
                     count = sqlReader.GetInt32(0);
                 }
 
-                tablesExists = (count == 2);
+                var tablesExists = (count == 2);
                 return tablesExists;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
             }
             finally
             {
                 connection.Close();
             }
-
-            return tablesExists;
         }
 
         private void CreateEventsTable()
@@ -235,10 +226,6 @@ namespace CQRS.EventSources
 
                 command.ExecuteNonQuery();
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
             finally
             {
                 connection.Close();
@@ -273,10 +260,6 @@ namespace CQRS.EventSources
 
                 command.ExecuteNonQuery();
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
             finally
             {
                 connection.Close();
@@ -304,11 +287,6 @@ namespace CQRS.EventSources
                 {
                     version = sqlReader.GetInt32(0);
                 }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Commit Exception Type: {0}", ex.GetType());
-                Console.WriteLine("Message: {0}", ex.Message);
             }
             finally
             {
