@@ -20,31 +20,34 @@ namespace CQRS.EventSources
 
         public bool CommitEvent<E>(string aggregateQualifiedName, int currentVersion, E @event) where E : Event
         {
-            using (SqlConnection connection = new SqlConnection(this._connectionString))
+            using var connection = new SqlConnection(this._connectionString);
+            
+            try
             {
                 connection.Open();
-
-                var command = connection.CreateCommand();
-                var transaction = connection.BeginTransaction("StoreEventTransaction");
-
-                command.Connection = connection;
-                command.Transaction = transaction;
-
-                var creationTime = DateTimeOffset.Now;
-                var eventData = JsonSerializer.Serialize(@event);
-                var eventType = typeof(E).AssemblyQualifiedName;
-                var version = GetVersion(@event.AggregateId);
-
-                if (version > currentVersion)
-                    throw new ConcurrencyException($"A concurrency issue has occurred.");
                 
+                using var transaction = connection.BeginTransaction("StoreEventTransaction");
+
                 try
                 {
+                    var command = connection.CreateCommand();
+
+                    command.Connection = connection;
+                    command.Transaction = transaction;
+
+                    var creationTime = DateTimeOffset.Now;
+                    var eventData = JsonSerializer.Serialize(@event);
+                    var eventType = typeof(E).AssemblyQualifiedName;
+                    var version = GetVersion(@event.AggregateId);
+
+                    if (version > currentVersion)
+                        throw new ConcurrencyException($"A concurrency issue has occurred.");
+
                     command.CommandText = "select Count(1) FROM Aggregates WHERE AggregateId = @AggregateId";
                     command.Parameters.Add(new SqlParameter("@AggregateId", SqlDbType.UniqueIdentifier));
                     command.Parameters["@AggregateId"].Value = @event.AggregateId;
 
-                    var count = (int) command.ExecuteScalar();
+                    var count = (int)command.ExecuteScalar();
                     if (count == 1)
                     {
                         command.CommandText = "select Version FROM Aggregates WHERE AggregateId = @AggregateId";
@@ -52,7 +55,6 @@ namespace CQRS.EventSources
                         command.Parameters.Add(new SqlParameter("@CreationTime", SqlDbType.DateTimeOffset));
                         command.Parameters["@Version"].Value = version + 1;
                         command.Parameters["@CreationTime"].Value = creationTime;
-
                         command.CommandText =
                             "update Aggregates set Version = @Version, LastModified = @CreationTime where AggregateId = @AggregateId";
                         command.ExecuteNonQuery();
@@ -76,7 +78,7 @@ namespace CQRS.EventSources
                         command.CommandText =
                             "insert into Aggregates (AggregateId, Version, AggregateType, LastModified) VALUES (@AggregateId, 1, @AggregateType, @CreationTime)";
                         command.ExecuteNonQuery();
-                        
+
                         command.CommandText =
                             "insert into Events (EventId, EventType, Version, EventData, AggregateId, CreationTime) VALUES (@EventId, @EventType, 1, @EventData, @AggregateId, @CreationTime)";
                         command.Parameters.Add(new SqlParameter("@EventId", SqlDbType.UniqueIdentifier));
@@ -97,10 +99,11 @@ namespace CQRS.EventSources
                     try
                     {
                         transaction.Rollback();
+                        throw new SqlEventSourceException($"CommitEvent method from SqlServerEventSource. Aggregate: {aggregateQualifiedName}. Event: {@event.GetType()}. Version: {currentVersion}. Exception: {ex.Message}.");
                     }
                     catch (Exception ex2)
                     {
-                        throw new SqlEventSourceException($"Transaction rollback failed. Aggregate: {aggregateQualifiedName}. Event: {@event.GetType()}. Version: {currentVersion}. Inner Exception: {ex.Message}. Outer Exception: {ex2.Message}");
+                        throw new SqlEventSourceException($"CommitEvent method from SqlServerEventSource. Transaction rollback failed. Aggregate: {aggregateQualifiedName}. Event: {@event.GetType()}. Version: {currentVersion}. Inner Exception: {ex.Message}. Outer Exception: {ex2.Message}");
                     }
                 }
                 finally
@@ -108,6 +111,15 @@ namespace CQRS.EventSources
                     connection.Close();
                 }
             }
+            catch (Exception ex)
+            {
+                throw new SqlEventSourceException($"CommitEvent method from SqlServerEventSource. Aggregate: {aggregateQualifiedName}. Event: {@event.GetType()}. Version: {currentVersion}. Exception: {ex.Message}.");
+            }
+            finally
+            {
+                connection.Close();
+            }
+
             return false;
         }
 
@@ -142,9 +154,13 @@ namespace CQRS.EventSources
                     }
                 }
             }
+            catch (Exception ex)
+            {
+                throw new SqlEventSourceException($"GetEventSources method from SqlServerEventSource. AggregateId: {aggregateId}. Exception: {ex.Message}.");
+            }
             finally
             {
-                connection.Open();
+                connection.Close();
             }
 
             return eventSources;
@@ -157,7 +173,7 @@ namespace CQRS.EventSources
             CreateEventsTable();
         }
 
-        private bool TablesExists()
+        public bool TablesExists()
         {
             using SqlConnection connection = new SqlConnection(this._connectionString);
 
@@ -165,7 +181,7 @@ namespace CQRS.EventSources
             {
                 connection.Open();
                 
-                var command = connection.CreateCommand();
+                using var command = connection.CreateCommand();
                 command.Connection = connection;
                 command.CommandText = "select COUNT(TABLE_NAME) from INFORMATION_SCHEMA.TABLES where TABLE_NAME like 'Aggregates' or TABLE_NAME like 'Events'";
                 
@@ -187,7 +203,7 @@ namespace CQRS.EventSources
             }
         }
 
-        private void CreateEventsTable()
+        public void CreateEventsTable()
         {
             using SqlConnection connection = new SqlConnection(this._connectionString);
     
@@ -232,7 +248,7 @@ namespace CQRS.EventSources
             }
         }
 
-        private void CreateAggregatesTable()
+        public void CreateAggregatesTable()
         {
             using SqlConnection connection = new SqlConnection(this._connectionString);
 
@@ -240,7 +256,7 @@ namespace CQRS.EventSources
             {
                 connection.Open();
                 
-                var command = connection.CreateCommand();
+                using var command = connection.CreateCommand();
                 command.CommandText =
                 @"SET ANSI_NULLS ON
 
@@ -266,7 +282,7 @@ namespace CQRS.EventSources
             }
         }
 
-        private int GetVersion(Guid aggregateId)
+        public int GetVersion(Guid aggregateId)
         {
             var version = 0;
             
@@ -294,6 +310,32 @@ namespace CQRS.EventSources
             }
 
             return version;
+        }
+
+        public void RemoveEventSourcing()
+        {
+            if (!TablesExists())
+                return;
+
+            using SqlConnection connection = new SqlConnection(this._connectionString);
+
+            try
+            {
+                connection.Open();
+
+                var command = connection.CreateCommand();
+                command.CommandText =
+                @"drop table Events";
+                command.ExecuteNonQuery();
+
+                command.CommandText =
+                @"drop table Aggregates";
+                command.ExecuteNonQuery();
+            }
+            finally
+            {
+                connection.Close();
+            }
         }
     }
 }

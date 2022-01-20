@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <PackageReference Include="Autofac" Version="6.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="6.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="6.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.9.4" />
     <PackageReference Include="NUnit" Version="3.13.1" />
     <PackageReference Include="NUnit3TestAdapter" Version="3.17.0" />
@@ -19,6 +21,12 @@
     <ProjectReference Include="..\Ecommerce.Communicator\Ecommerce.Communicator.csproj" />
     <ProjectReference Include="..\Ecommerce.ReadModel\Ecommerce.ReadModel.csproj" />
     <ProjectReference Include="..\Ecommerce.WriteModel\Ecommerce.WriteModel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Config\config.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

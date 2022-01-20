@@ -10,36 +10,32 @@ using Microsoft.Data.Sqlite;
 
 namespace CQRS.EventSources
 {
-    public class SQLiteEventSource : ISqlEventSource
+    public class SqliteEventSource : ISqlEventSource
     {
         private readonly string _connectionString;
-        private bool _memoryMode;
-        private SqliteConnection _connection;
 
-        public SQLiteEventSource()
-        {
-            this._connectionString = @"Data Source=InMemorySample;Mode=Memory;Cache=Shared";
-            this._memoryMode = true;
-            this._connection = new SqliteConnection(_connectionString);
-            _connection.Open();
-
-        }
-
-        public SQLiteEventSource(string connectionString)
+        public SqliteEventSource(string connectionString)
         {
             this._connectionString = connectionString;
-            this._memoryMode = false;
         }
 
         public bool CommitEvent<E>(string aggregateQualifiedName, int currentVersion, E @event) where E : Event
         {
-            OpenConnection(); 
-            var command = _connection.CreateCommand();
-            using (var transaction = _connection.BeginTransaction())
+            using SqliteConnection connection = new SqliteConnection(this._connectionString);
+
+            try
             {
+                connection.Open();
+
+                using var transaction = connection.BeginTransaction();
+
                 try
                 {
-                    command.Connection = _connection;
+
+
+                    using var command = connection.CreateCommand();
+
+                    command.Connection = connection;
                     command.Transaction = transaction;
 
                     var creationTime = DateTimeOffset.Now;
@@ -76,12 +72,10 @@ namespace CQRS.EventSources
                         command.Parameters.Add(new SqliteParameter("@CreationTime", SqliteType.Text));
                         command.Parameters["@Version"].Value = version;
                         command.Parameters["@CreationTime"].Value = creationTime.ToString();
-                        //Update Aggregate
                         command.CommandText =
                             "update Aggregates set Version = @Version, LastModified = @CreationTime where AggregateId = @AggregateId";
                         command.ExecuteNonQuery();
 
-                        //Insert Event
                         command.Parameters.Add(new SqliteParameter("@EventId", SqliteType.Text));
                         command.Parameters.Add(new SqliteParameter("@EventType", SqliteType.Text));
                         command.Parameters.Add(new SqliteParameter("@EventData", SqliteType.Text));
@@ -101,6 +95,7 @@ namespace CQRS.EventSources
                         command.CommandText =
                             "insert into Aggregates (AggregateId, Version, AggregateType, LastModified) VALUES (@AggregateId, 1, @AggregateType, @CreationTime)";
                         command.ExecuteNonQuery();
+
                         command.CommandText =
                             "insert into Events (EventId, EventType, Version, EventData, AggregateId, CreationTime) VALUES (@EventId, @EventType, 1, @EventData, @AggregateId, @CreationTime)";
                         command.Parameters.Add(new SqliteParameter("@EventId", SqliteType.Text));
@@ -121,54 +116,69 @@ namespace CQRS.EventSources
                     try
                     {
                         transaction.Rollback();
-                        throw new SqlEventSourceException($"Transaction rollback failed. Aggregate: {aggregateQualifiedName}. Event: {@event.GetType()}. Version: {currentVersion}. Inner Exception: {ex.Message}.");
+                        throw new SqlEventSourceException($"CommitEvent method from SqliteEventSource. Aggregate: {aggregateQualifiedName}. Event: {@event.GetType()}. Version: {currentVersion}. Exception: {ex.Message}.");
                     }
                     catch (Exception ex2)
                     {
-                        throw new SqlEventSourceException($"Transaction rollback failed. Aggregate: {aggregateQualifiedName}. Event: {@event.GetType()}. Version: {currentVersion}. Inner Exception: {ex.Message}. Outer Exception: {ex2.Message}");
+                        throw new SqlEventSourceException($"CommitEvent method from SqliteEventSource. Transaction rollback failed. Aggregate: {aggregateQualifiedName}. Event: {@event.GetType()}. Version: {currentVersion}. Inner Exception: {ex.Message}. Outer Exception: {ex2.Message}");
                     }
                 }
                 finally
                 {
-                    CloseConnection();
+                    connection.Close();
                 }
             }
+            catch (Exception ex)
+            {
+                throw new SqlEventSourceException($"CommitEvent method from SqliteEventSource. Aggregate: {aggregateQualifiedName}. Event: {@event.GetType()}. Version: {currentVersion}. Exception: {ex.Message}.");
+            }
+            finally
+            {
+                connection.Close();
+            }
+
             return false;
         }
 
         public List<EventSource> GetEventSources(Guid aggregateId)
         {
             var eventSources = new List<EventSource>();
-           
+
+            using SqliteConnection connection = new SqliteConnection(this._connectionString);
+
             try
             {
-                OpenConnection();
-                _connection.Open();
+                connection.Open();
 
-                var command = _connection.CreateCommand();
+                using var command = connection.CreateCommand();
                 command.CommandText = "select * from Events where AggregateId = @AggregateId order by Version asc";
                 command.Parameters.Add(new SqliteParameter("@AggregateId", SqliteType.Text));
                 command.Parameters["@AggregateId"].Value = aggregateId.ToString();
-                using (var sqlReader = command.ExecuteReader())
+
+                using var sqlReader = command.ExecuteReader();
+
+                while (sqlReader.Read())
                 {
-                    while (sqlReader.Read())
+                    eventSources.Add(new EventSource()
                     {
-                        eventSources.Add(new EventSource()
-                        {
-                            EventId = Guid.Parse(sqlReader.GetString(0)),
-                            EventType = sqlReader.GetString(1),
-                            Version = sqlReader.GetInt32(2),
-                            EventData = sqlReader.GetString(3),
-                            AggregateId = Guid.Parse(sqlReader.GetString(4)),
-                            CreationTime = DateTimeOffset.Parse(sqlReader.GetString(5))
-                        });
-                    }
+                        EventId = Guid.Parse(sqlReader.GetString(0)),
+                        EventType = sqlReader.GetString(1),
+                        Version = sqlReader.GetInt32(2),
+                        EventData = sqlReader.GetString(3),
+                        AggregateId = Guid.Parse(sqlReader.GetString(4)),
+                        CreationTime = DateTimeOffset.Parse(sqlReader.GetString(5))
+                    });
                 }
             }
+            catch (Exception ex)
+            {
+                throw new SqlEventSourceException($"GetEventSources method from SqliteEventSource. AggregateId: {aggregateId}. Exception: {ex.Message}.");
+            }  
             finally
             {
-                CloseConnection();
+                connection.Close();
             }
+
             return eventSources;
         }
 
@@ -181,12 +191,13 @@ namespace CQRS.EventSources
 
         public bool TablesExists()
         {
+            using SqliteConnection connection = new SqliteConnection(this._connectionString);
+            
             try
             {
-                OpenConnection();
-        
-                var command = _connection.CreateCommand();
-                command.Connection = _connection;
+                connection.Open();
+
+                using var command = connection.CreateCommand();
                 command.CommandText = "SELECT COUNT(name) FROM sqlite_master WHERE type = 'table' and name = 'Aggregates' or name = 'Events'";
 
                 var sqlReader = command.ExecuteReader();
@@ -203,18 +214,19 @@ namespace CQRS.EventSources
             }
             finally
             {
-                CloseConnection();
+                connection.Close();
             }
         }
 
         public void CreateEventsTable()
         {
+            using SqliteConnection connection = new SqliteConnection(this._connectionString);
 
             try
             {
-                OpenConnection();
+                connection.Open();
 
-                var command = _connection.CreateCommand();
+                using var command = connection.CreateCommand();
                 command.CommandText =
                 @"create table Events(EventId text primary key NOT NULL, EventType text NULL, Version integer NOT NULL, 
                 EventData text NOT NULL, AggregateId text NOT NULL, CreationTime text NOT NULL)";
@@ -223,17 +235,19 @@ namespace CQRS.EventSources
             }
             finally
             {
-                CloseConnection();
+                connection.Close();
             }
         }
 
         public void CreateAggregatesTable()
         {
+            using SqliteConnection connection = new SqliteConnection(this._connectionString);
+
             try
             {
-                OpenConnection();
+                connection.Open();
 
-                var command = _connection.CreateCommand();
+                using var command = connection.CreateCommand();
                 command.CommandText =
                 @"create table Aggregates(AggregateId text primary key NOT NULL,
                   AggregateType text NULL, Version integer NOT NULL, LastModified text NOT NULL)";
@@ -242,19 +256,21 @@ namespace CQRS.EventSources
             }
             finally
             {
-                CloseConnection();
+                connection.Close();
             }
         }
 
         public int GetVersion(Guid aggregateId)
         {
             var version = 0;
+            
+            using SqliteConnection connection = new SqliteConnection(this._connectionString);
 
             try
             {
-                OpenConnection();
+                connection.Open();
 
-                var command = _connection.CreateCommand();
+                using var command = connection.CreateCommand();
                 command.CommandText = "select Version FROM Aggregates WHERE AggregateId = @AggregateId";
                 command.Parameters.Add(new SqliteParameter("@AggregateId", SqliteType.Text));
                 command.Parameters["@AggregateId"].Value = aggregateId.ToString();
@@ -268,26 +284,35 @@ namespace CQRS.EventSources
             }
             finally
             {
-                CloseConnection();
+                connection.Close();
             }
 
             return version;
         }
 
-        private void OpenConnection()
+        public void RemoveEventSourcing()
         {
-            if (!_memoryMode)
-            {
-                _connection = new SqliteConnection(_connectionString);
-                _connection.Open();
-            }
-        }
+            if (!TablesExists())
+                return;
 
-        private void CloseConnection()
-        {
-            if (!_memoryMode)
+            using SqliteConnection connection = new SqliteConnection(this._connectionString);
+
+            try
             {
-                _connection.Close();
+                connection.Open();
+
+                using var command = connection.CreateCommand();
+                command.CommandText =
+                @"drop table Events";
+                command.ExecuteNonQuery();
+
+                command.CommandText =
+                @"drop table Aggregates";
+                command.ExecuteNonQuery();
+            }
+            finally
+            {
+                connection.Close();
             }
         }
     }

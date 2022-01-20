@@ -10,5 +10,6 @@ namespace CQRS.EventSources
         bool CommitEvent<E>(string aggregateQualifiedName,int currentVersion, E @event) where E : Event;
         List<EventSource> GetEventSources(Guid aggregateId);
         void ScaffoldEventSourcing();
+        void RemoveEventSourcing();
     }
 }

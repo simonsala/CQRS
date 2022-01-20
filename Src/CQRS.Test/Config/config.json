@@ -1,0 +1,6 @@
+{
+  "ConnectionStrings": {
+    "SqliteEventSource": "Data Source=C:\\Users\\simon\\OneDrive\\Documents\\SqliteDB\\es.db",
+    "SqlServerEventSource": "Data Source=(localdb)\\MSSQLLocalDB;Initial Catalog=ES;Integrated Security=True;Connect Timeout=30;Encrypt=False;TrustServerCertificate=False;ApplicationIntent=ReadWrite;MultiSubnetFailover=False"
+  }
+}

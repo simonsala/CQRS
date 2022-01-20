@@ -22,6 +22,8 @@ namespace CQRS.Test.EventProcessors
     {
         private ISqlEventSource _sqlEventSource;
         private IEventProcessor _eventProcessor;
+        private Config _config;
+
 
         [SetUp]
         public void Init()
@@ -31,7 +33,9 @@ namespace CQRS.Test.EventProcessors
 
             var container = builder.Build();
 
-            _sqlEventSource = new SQLiteEventSource();
+            _config = new Config();
+
+            _sqlEventSource = new SqliteEventSource(_config.SqliteEventSource);
             _sqlEventSource.ScaffoldEventSourcing();
 
             _eventProcessor = new EventProcessor();
@@ -42,6 +46,13 @@ namespace CQRS.Test.EventProcessors
             _eventProcessor.Container = container;
         }
 
+        [TearDown]
+        public void CleanUp()
+        {
+            _sqlEventSource.RemoveEventSourcing();
+            _sqlEventSource.ScaffoldEventSourcing();
+        }
+
         [Test]
         public void Should_Process_Event_Sucessfully()
         {
@@ -50,7 +61,7 @@ namespace CQRS.Test.EventProcessors
             var productId1 = Guid.NewGuid();
             var productId2 = Guid.NewGuid();
 
-            var createInventoryEvent = new CreateInventory()
+            var createInventory = new CreateInventory()
             {
                 AggregateId = aggregateId,
                 EventId = Guid.NewGuid(),
@@ -75,14 +86,14 @@ namespace CQRS.Test.EventProcessors
                 Price = 4500,
             };
 
-            var removeProduct1 = new RemoveProduct()
+            var removeProduct = new RemoveProduct()
             {
                 AggregateId = aggregateId,
                 ProductId = productId1,
                 EventId = Guid.NewGuid()
             };
 
-            var updateProduct2 = new UpdateProduct()
+            var updateProduct = new UpdateProduct()
             {
                 AggregateId = aggregateId,
                 EventId = Guid.NewGuid(),
@@ -94,11 +105,11 @@ namespace CQRS.Test.EventProcessors
             //Act && Assert
             Assert.DoesNotThrow(() =>
             {
-                _eventProcessor.ProcessEvent(createInventoryEvent);
+                _eventProcessor.ProcessEvent(createInventory);
                 _eventProcessor.ProcessEvent(addProduct1);
                 _eventProcessor.ProcessEvent(addProduct2);
-                _eventProcessor.ProcessEvent(removeProduct1);
-                _eventProcessor.ProcessEvent(updateProduct2);
+                _eventProcessor.ProcessEvent(removeProduct);
+                _eventProcessor.ProcessEvent(updateProduct);
             });
         }
 
@@ -109,7 +120,7 @@ namespace CQRS.Test.EventProcessors
             var productId1 = Guid.NewGuid();
             var productId2 = Guid.NewGuid();
 
-            var createInventoryEvent = new CreateInventory()
+            var createInventory = new CreateInventory()
             {
                 AggregateId = aggregateId,
                 EventId = Guid.NewGuid(),
@@ -134,14 +145,14 @@ namespace CQRS.Test.EventProcessors
                 Price = 4500,
             };
 
-            var removeProduct1 = new RemoveProduct()
+            var removeProduct = new RemoveProduct()
             {
                 AggregateId = aggregateId,
                 ProductId = productId1,
                 EventId = Guid.NewGuid()
             };
 
-            var updateProduct2 = new UpdateProduct()
+            var updateProduct = new UpdateProduct()
             {
                 AggregateId = aggregateId,
                 EventId = Guid.NewGuid(),
@@ -153,11 +164,11 @@ namespace CQRS.Test.EventProcessors
             //Act && Assert
             Assert.DoesNotThrow(() =>
             {
-                _eventProcessor.ProcessHandlers(createInventoryEvent);
+                _eventProcessor.ProcessHandlers(createInventory);
                 _eventProcessor.ProcessHandlers(addProduct1);
                 _eventProcessor.ProcessHandlers(addProduct2);
-                _eventProcessor.ProcessHandlers(removeProduct1);
-                _eventProcessor.ProcessHandlers(updateProduct2);
+                _eventProcessor.ProcessHandlers(removeProduct);
+                _eventProcessor.ProcessHandlers(updateProduct);
             });
         }
 
@@ -168,7 +179,7 @@ namespace CQRS.Test.EventProcessors
             var aggregateId = Guid.NewGuid();
             var productId1 = Guid.NewGuid();
 
-            var createInventoryEvent = new CreateInventory()
+            var createInventory = new CreateInventory()
             {
                 AggregateId = aggregateId,
                 EventId = Guid.NewGuid(),
@@ -179,7 +190,7 @@ namespace CQRS.Test.EventProcessors
 
             Assert.Throws<SqlEventSourceException>(() =>
             {
-                _eventProcessor.ProcessEvent(createInventoryEvent);
+                _eventProcessor.ProcessEvent(createInventory);
             });
 
             Assert.AreEqual(_eventProcessor.OngoingRetries, _eventProcessor.Retries);
@@ -192,7 +203,7 @@ namespace CQRS.Test.EventProcessors
             var aggregateId = Guid.NewGuid();
             var productId1 = Guid.NewGuid();
 
-            var createInventoryEvent = new CreateInventory()
+            var createInventory = new CreateInventory()
             {
                 AggregateId = aggregateId,
                 EventId = Guid.NewGuid(),
@@ -203,7 +214,7 @@ namespace CQRS.Test.EventProcessors
 
             Assert.Throws<SqlEventSourceException>(() =>
             {
-                _eventProcessor.ProcessEvent(createInventoryEvent);
+                _eventProcessor.ProcessEvent(createInventory);
             });
         }
 
@@ -214,7 +225,7 @@ namespace CQRS.Test.EventProcessors
             var aggregateId = Guid.NewGuid();
             var productId1 = Guid.NewGuid();
 
-            var createInventoryEvent = new CreateInventory()
+            var createInventory = new CreateInventory()
             {
                 AggregateId = aggregateId,
                 EventId = Guid.NewGuid(),
@@ -225,7 +236,7 @@ namespace CQRS.Test.EventProcessors
 
             Assert.Throws<ConcurrencyException>(() =>
             {
-                _eventProcessor.ProcessEvent(createInventoryEvent);
+                _eventProcessor.ProcessEvent(createInventory);
             });
         }
 
@@ -236,7 +247,7 @@ namespace CQRS.Test.EventProcessors
             var aggregateId = Guid.NewGuid();
             var productId1 = Guid.NewGuid();
 
-            var createInventoryEvent = new CreateInventory()
+            var createInventory = new CreateInventory()
             {
                 AggregateId = aggregateId,
                 EventId = Guid.NewGuid(),
@@ -247,7 +258,7 @@ namespace CQRS.Test.EventProcessors
 
             Assert.Throws<AggregateException>(() =>
             {
-                _eventProcessor.ProcessEvent(createInventoryEvent);
+                _eventProcessor.ProcessEvent(createInventory);
             });
         }
 
@@ -258,7 +269,7 @@ namespace CQRS.Test.EventProcessors
             var aggregateId = Guid.NewGuid();
             var productId1 = Guid.NewGuid();
 
-            var createInventoryEvent = new CreateInventory()
+            var createInventory = new CreateInventory()
             {
                 AggregateId = aggregateId,
                 EventId = Guid.NewGuid(),
@@ -269,7 +280,7 @@ namespace CQRS.Test.EventProcessors
 
             Assert.Throws<Exception>(() =>
             {
-                _eventProcessor.ProcessEvent(createInventoryEvent);
+                _eventProcessor.ProcessEvent(createInventory);
             });
         }
     }

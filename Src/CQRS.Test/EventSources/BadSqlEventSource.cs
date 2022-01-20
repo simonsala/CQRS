@@ -32,5 +32,10 @@ namespace CQRS.Test.EventSources
         {
             throw new NotImplementedException();
         }
+
+        public void RemoveEventSourcing()
+        {
+            throw new NotImplementedException();
+        }
     }
 }
