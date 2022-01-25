@@ -283,5 +283,49 @@ namespace CQRS.Test.EventProcessors
                 _eventProcessor.ProcessEvent(createInventory);
             });
         }
+
+        [Test]
+        public void Should_ReplayAggregate_Successfully()
+        {
+            var aggregateId = Guid.NewGuid();
+            var productId1 = Guid.NewGuid();
+            var productId2 = Guid.NewGuid();
+
+            var createInventory = new CreateInventory()
+            {
+                AggregateId = aggregateId,
+                EventId = Guid.NewGuid(),
+                InventoryName = "Electronics",
+            };
+
+            var addProduct1 = new AddProduct()
+            {
+                AggregateId = aggregateId,
+                EventId = Guid.NewGuid(),
+                ProductId = productId1,
+                ProductName = "IPhone 13",
+                Price = 1800,
+            };
+
+            var addProduct2 = new AddProduct()
+            {
+                AggregateId = aggregateId,
+                EventId = Guid.NewGuid(),
+                ProductId = productId2,
+                ProductName = "Macbook Air 14 inch retina 256GB SSD",
+                Price = 4500,
+            };
+
+            //Act
+            _eventProcessor.ProcessEvent(createInventory);
+            _eventProcessor.ProcessEvent(addProduct1);
+            _eventProcessor.ProcessEvent(addProduct2);
+
+            var aggregate = _eventProcessor.ReplayAggregate<InventoryAggregate>(aggregateId);
+
+            //Assert
+            Assert.IsTrue(aggregate.ProductIds.Contains(productId1));
+            Assert.IsTrue(aggregate.ProductIds.Contains(productId2));
+        }
     }
 }

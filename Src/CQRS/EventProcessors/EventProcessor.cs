@@ -4,13 +4,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
-using System.Threading;
 using CQRS.Aggregates;
 using CQRS.Events;
 using CQRS.EventSources;
 using CQRS.Exceptions;
 using AggregateException = System.AggregateException;
-using Module = Autofac.Module;
 
 namespace CQRS.EventProcessors
 {
@@ -202,6 +200,29 @@ namespace CQRS.EventProcessors
                     .Where(t => t.IsAssignableTo(typeof(IEventHandler)) && t.IsAssignableTo(handlerEventType))
                     .ToList();
             return eventHandlerTypes;
+        }
+
+        public E ReplayAggregate<E>(Guid aggregateId)
+        {
+            var builder = new ContainerBuilder();
+            var aggregateType = typeof(E);
+            builder.RegisterType(aggregateType);
+            var container = builder.Build();
+
+            using var scope = container.BeginLifetimeScope();
+            var aggregate = scope.Resolve(aggregateType);
+
+            var eventSources = _sqlEventSource.GetEventSources(aggregateId);
+
+            if (eventSources.Count > 0)
+                foreach (var eventSource in eventSources)
+                {
+                    var previousEventType = Type.GetType(eventSource.EventType);
+                    var previousEvent = JsonSerializer.Deserialize(eventSource.EventData, previousEventType);
+                    HandleAndApply(ref aggregate, previousEvent, previousEventType);
+                }
+
+            return (E)aggregate;
         }
     }
 }

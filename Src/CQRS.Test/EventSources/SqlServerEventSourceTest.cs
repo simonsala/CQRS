@@ -237,7 +237,6 @@ namespace CQRS.Test.EventSources
         public void Should_RemoveEventSourcing_Successfully()
         {
             //Act
-
             _sqlServerEventSource.RemoveEventSourcing();
 
             var tableExists = _sqlServerEventSource.TablesExists();

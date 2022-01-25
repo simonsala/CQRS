@@ -6,12 +6,13 @@ namespace Ecommerce.WriteModel.Inventory
 {
     public class InventoryAggregate : IAggregate,
         IRaiseEvent<CreateInventory>,
-        IRaiseEvent<AddProduct>, 
-        IRaiseEvent<RemoveProduct>, 
+        IRaiseEvent<AddProduct>,
+        IRaiseEvent<RemoveProduct>,
         IRaiseEvent<UpdateProduct>
     {
         public Guid AggregateId { get; set; }
         private List<Guid> _productIds = new();
+        public List<Guid> ProductIds { get => _productIds; }
         
         public void Handle(CreateInventory e)
         {
