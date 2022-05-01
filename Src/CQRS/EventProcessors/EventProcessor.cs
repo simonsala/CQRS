@@ -91,15 +91,15 @@ namespace CQRS.EventProcessors
                     }
                     break;
                 }
-                catch (SqlEventSourceException ex)
+                catch (SqlEventSourceException)
                 {
                     if (retries == _retries) throw;
                 }
-                catch (ConcurrencyException ex)
+                catch (ConcurrencyException)
                 {
                     if (retries == _retries) throw;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                      throw;
                 }
