@@ -9,6 +9,7 @@ using CQRS.Events;
 using CQRS.EventSources;
 using CQRS.Exceptions;
 using AggregateException = System.AggregateException;
+using System.Threading.Tasks;
 
 namespace CQRS.EventProcessors
 {
@@ -17,7 +18,8 @@ namespace CQRS.EventProcessors
         private Assembly[] _assemblies;
         private ISqlEventSource _sqlEventSource;
         private int _retries = 3;
-        private int _ongoingRetries = 0;
+        private int _ongoingDomainRetries = 0;
+        private int _ongoingHandlerRetries = 0;
         private IContainer _container;
 
         public EventProcessor()
@@ -51,9 +53,14 @@ namespace CQRS.EventProcessors
             }
         }
 
-        public int OngoingRetries
+        public int OngoingDomainRetries
         {
-            get => _ongoingRetries;
+            get => _ongoingDomainRetries;
+        }
+
+        public int OngoingHandlerRetries
+        {
+            get => _ongoingHandlerRetries;
         }
 
         public Assembly[] Assemblies
@@ -74,21 +81,38 @@ namespace CQRS.EventProcessors
             }
         }
 
-        public void ProcessEvent<E>(E @event) where E : Event
+        public bool ProcessEvent<E>(E @event) where E : Event
+        {
+            if (ProcessDomainWithRetries(@event))
+            {
+                ProcessHandlers(@event);
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> ProcessEventAsync<E>(E @event) where E : Event
+        {
+            await Task.Yield();
+            return ProcessEvent(@event);
+        }
+
+        public bool ProcessDomainWithRetries<E>(E @event) where E : Event
         {
             var retries = 1;
-            _ongoingRetries = 0;
+            _ongoingDomainRetries = 0;
+
+            var result = false;
 
             while (retries != _retries + 1)
             {
                 try
                 {
-                    _ongoingRetries = retries;
-
-                    if (ProcessDomain(@event))
-                    {
-                        ProcessHandlers(@event);
-                    }
+                    _ongoingDomainRetries = retries;
+                    result = ProcessDomain(@event);
                     break;
                 }
                 catch (SqlEventSourceException)
@@ -101,7 +125,35 @@ namespace CQRS.EventProcessors
                 }
                 catch (Exception)
                 {
-                     throw;
+                    throw;
+                }
+
+                retries++;
+            }
+
+            return result;
+        }
+
+        public void ProcessHandlerWithRetries(Action action)
+        {
+            var retries = 1;
+            _ongoingHandlerRetries = 0;
+
+            while (retries != _retries + 1)
+            {
+                try
+                {
+                    _ongoingHandlerRetries = retries;
+                    action();
+                    break;
+                }
+                catch (HandlerException)
+                {
+                    if (retries == _retries) break;
+                }
+                catch (Exception)
+                {
+                    throw;
                 }
 
                 retries++;
@@ -140,27 +192,36 @@ namespace CQRS.EventProcessors
             return eventCommitted;
         }
 
-        public void ProcessHandlers<E>(E @event) where E : Event
+        public bool ProcessHandlers<E>(E @event) where E : Event
         {
-            var eventHandlerTypes = GetEventHandlerTypes(typeof(IHandleEvent<E>));
-
-            using var scope = _container.BeginLifetimeScope(
-                b =>
-                {
-                    foreach (var eventHandlerType in eventHandlerTypes)
-                    {
-                        b.RegisterType(eventHandlerType).As<IEventHandler>();
-                    }
-                });
-
-            var eventHandlers =
-                scope.Resolve<IEnumerable<IEventHandler>>()
-                    .OrderBy(e => e.Priority);
-
-            foreach (var eventHandler in eventHandlers)
+            try
             {
-                var handleEvent = eventHandler as IHandleEvent<E>;
-                handleEvent.Handle(@event);
+                var eventHandlerTypes = GetEventHandlerTypes(typeof(IHandleEvent<E>));
+
+                using var scope = _container.BeginLifetimeScope(
+                    b =>
+                    {
+                        foreach (var eventHandlerType in eventHandlerTypes)
+                        {
+                            b.RegisterType(eventHandlerType).As<IEventHandler>();
+                        }
+                    });
+
+                var eventHandlers =
+                    scope.Resolve<IEnumerable<IEventHandler>>()
+                        .OrderBy(e => e.Priority);
+
+                foreach (var eventHandler in eventHandlers)
+                {
+                    var handleEvent = eventHandler as IHandleEvent<E>;
+                    ProcessHandlerWithRetries(() => handleEvent.Handle(@event));
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                throw new HandlerException($"Handler of event type {typeof(E)} failed. AggregateId: {@event.AggregateId}, EventId: {@event.EventId}." +
+                    $" Exception: {ex.Message}");
             }
         }
 

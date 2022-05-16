@@ -26,4 +26,10 @@ namespace Ecommerce.WriteModel.Inventory
         public string ProductName { get; set; }
         public double Price { get; set; }
     }
+
+    //Only used to test EventProcessor handler's retries
+    public class BadEvent : Event
+    {
+
+    }
 }

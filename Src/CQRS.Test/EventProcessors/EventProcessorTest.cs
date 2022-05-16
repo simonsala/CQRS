@@ -193,7 +193,28 @@ namespace CQRS.Test.EventProcessors
                 _eventProcessor.ProcessEvent(createInventory);
             });
 
-            Assert.AreEqual(_eventProcessor.OngoingRetries, _eventProcessor.Retries);
+            Assert.AreEqual(_eventProcessor.OngoingDomainRetries, _eventProcessor.Retries);
+        }
+
+        [Test]
+        public void Should_RetryProcessingHandler_When_Exception()
+        {
+            //Arrange
+            var aggregateId = Guid.NewGuid();
+            var productId1 = Guid.NewGuid();
+
+            var badEvent = new BadEvent()
+            {
+                AggregateId = aggregateId,
+                EventId = Guid.NewGuid(),
+            };
+
+            Assert.Throws<HandlerException>(() =>
+            {
+                _eventProcessor.ProcessEvent(badEvent);
+            });
+
+            Assert.AreEqual(_eventProcessor.OngoingHandlerRetries, _eventProcessor.OngoingHandlerRetries);
         }
 
         [Test]

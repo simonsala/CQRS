@@ -8,7 +8,8 @@ namespace Ecommerce.WriteModel.Inventory
         IRaiseEvent<CreateInventory>,
         IRaiseEvent<AddProduct>,
         IRaiseEvent<RemoveProduct>,
-        IRaiseEvent<UpdateProduct>
+        IRaiseEvent<UpdateProduct>,
+        IRaiseEvent<BadEvent>
     {
         public Guid AggregateId { get; set; }
         private List<Guid> _productIds = new();
@@ -60,6 +61,14 @@ namespace Ecommerce.WriteModel.Inventory
         }
 
         public void Apply(UpdateProduct e)
+        {
+        }
+
+        public void Handle(BadEvent e)
+        {
+        }
+
+        public void Apply(BadEvent e)
         {
         }
     }

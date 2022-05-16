@@ -2,16 +2,13 @@
 using Ecommerce.ReadModel.Inventory.Models;
 using Ecommerce.WriteModel.Inventory;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Ecommerce.ReadModel.Inventory
 {
     public class InventoryReadModel : IEventHandler,
         IHandleEvent<CreateInventory>, IHandleEvent<AddProduct>,
-        IHandleEvent<UpdateProduct>, IHandleEvent<RemoveProduct>
+        IHandleEvent<UpdateProduct>, IHandleEvent<RemoveProduct>,
+        IHandleEvent<BadEvent>
     {
         private IInMemoryDatabase _inMemoryDatabase;
         public int Priority => 1;
@@ -69,6 +66,12 @@ namespace Ecommerce.ReadModel.Inventory
             var inventoryDocument = _inMemoryDatabase.Get<InventoryDocument>(e.AggregateId);
             inventoryDocument.RemoveProductId(e.ProductId);
             _inMemoryDatabase.Update(inventoryDocument);
+        }
+
+        //Only used to test EventProcessor handler's retries
+        public void Handle(BadEvent e)
+        {
+            throw new Exception("Bad Event");
         }
     }
 }
