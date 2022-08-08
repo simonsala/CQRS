@@ -8,7 +8,7 @@ using CQRS.Aggregates;
 using CQRS.Events;
 using CQRS.EventSources;
 using CQRS.Exceptions;
-using AggregateException = System.AggregateException;
+using AggregateException = CQRS.Exceptions.AggregateException;
 using System.Threading.Tasks;
 
 namespace CQRS.EventProcessors
@@ -123,6 +123,10 @@ namespace CQRS.EventProcessors
                 {
                     if (retries == _retries) throw;
                 }
+                catch (AggregateException)
+                {
+                    throw;
+                }
                 catch (Exception)
                 {
                     throw;
@@ -147,13 +151,9 @@ namespace CQRS.EventProcessors
                     action();
                     break;
                 }
-                catch (HandlerException)
-                {
-                    if (retries == _retries) break;
-                }
                 catch (Exception)
                 {
-                    throw;
+                    if (retries == _retries) throw;
                 }
 
                 retries++;
