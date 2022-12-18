@@ -1,34 +1,30 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CQRS.Exceptions
 {
     public class AggregateException : Exception {
-        public AggregateException(string message) : base($"Aggregate Exception: {message}")
+        public AggregateException(string message) : base(message)
         {
         }
     }
 
     public class HandlerException : Exception
     {
-        public HandlerException(string message) : base($"Handlers Exception: {message}")
+        public HandlerException(string message) : base(message)
         {
         }
     }
 
     public class SqlEventSourceException : Exception
     {
-        public SqlEventSourceException(string message) : base($"Sql Event Source Exception: {message}")
+        public SqlEventSourceException(string message) : base(message)
         {
         }
     }
 
     public class ConcurrencyException : Exception
     {
-        public ConcurrencyException(string message) : base($"Concurrency Exception: {message}")
+        public ConcurrencyException(string message) : base(message)
         {
         }
     }
